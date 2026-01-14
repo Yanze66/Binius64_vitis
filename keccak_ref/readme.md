@@ -5,6 +5,10 @@ Here is the basic idea of migerating the Rust project to hardware platform.
 I compile and execute the rust project of keccak and print out the witness as a golden reference. The main src file I wrok on is in dir "crates/circuits/src/keccak/fixed_length.rs", 
 remark here so that anyone can reproduce the for the next. Also remember to install extensions "rust-analyzer" for a quick benchmark.
 
+If you wanna run the whole test, go dir "binius64", commend:
+
+    cargo test keccak256_fixed -- --nocapture
+
 
 It supports to compress arbitrary length of message, recorded in "Keccak_witness_dump_xxbyte.txt".
 
