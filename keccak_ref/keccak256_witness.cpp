@@ -1,114 +1,37 @@
-// keccak_witness_aligned.c
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <assert.h>
 
-/* =========================================================
- *  Layout (MUST match Rust dump)
- * ========================================================= */
-#define N_CONST     25
-#define N_WITNESS   5
-#define COMMITTED   1024   // only committed, ignore scratch
+/* ---------- constants (same as Rust) ---------- */
 
-typedef struct { uint32_t idx; } Wire;
-static uint64_t value_vec[COMMITTED];
-static uint32_t next_internal = N_CONST + N_WITNESS;
-
-/* =========================================================
- *  Fixed constant table (EXACT order from Rust dump)
- * ========================================================= */
-static const uint64_t CONST_TABLE[N_CONST] = {
-    0x0000000000000000ULL,
-    0x0000000000000001ULL,
-    0x0000000000000088ULL,
-    0x000000000000008AULL,
-    0x000000000000800AULL,
-    0x0000000000008082ULL,
-    0x000000000000808BULL,
-    0x0000000080000001ULL,
-    0x000000008000000AULL,
-    0x0000000080008009ULL,
-    0x000000008000808BULL,
-    0x8000000000000000ULL,
-    0x8000000000000080ULL,
-    0x800000000000008BULL,
-    0x8000000000008002ULL,
-    0x8000000000008003ULL,
-    0x8000000000008009ULL,
-    0x8000000000008080ULL,
-    0x8000000000008089ULL,
-    0x800000000000808AULL,
-    0x800000008000000AULL,
-    0x8000000080008000ULL,
-    0x8000000080008008ULL,
-    0x8000000080008081ULL,
-    0xFFFFFFFFFFFFFFFFULL
-};
-
-/* =========================================================
- *  Builder helpers
- * ========================================================= */
-static inline Wire constant_wire(uint32_t i) {
-    assert(i < N_CONST);
-    return (Wire){ i };
-}
-
-static inline Wire add_internal(uint64_t v) {
-    assert(next_internal < COMMITTED);
-    Wire w = { next_internal++ };
-    value_vec[w.idx] = v;
-    return w;
-}
-
-/* =========================================================
- *  Gates (1 gate = 1 internal)
- * ========================================================= */
-static inline Wire bxor(Wire a, Wire b) {
-    return add_internal(value_vec[a.idx] ^ value_vec[b.idx]);
-}
-
-static inline Wire bnot(Wire a) {
-    return add_internal(~value_vec[a.idx]);
-}
-
-static inline uint64_t rotl64(uint64_t x, uint32_t r) {
-    return (x << r) | (x >> (64 - r));
-}
-
-static inline Wire rotl(Wire a, uint32_t r) {
-    return add_internal(rotl64(value_vec[a.idx], r));
-}
-
-static inline Wire fax(Wire na, Wire b, Wire c) {
-    return add_internal((value_vec[na.idx] & value_vec[b.idx]) ^ value_vec[c.idx]);
-}
-
-static inline Wire bxor_multi(Wire *w, int n) {
-    uint64_t acc = 0;
-    for (int i = 0; i < n; i++) acc ^= value_vec[w[i].idx];
-    return add_internal(acc);
-}
-
-/* =========================================================
- *  Keccak constants
- * ========================================================= */
 static const uint64_t RC[24] = {
-    0x0000000000000001ULL, 0x0000000000008082ULL,
-    0x800000000000808AULL, 0x8000000080008000ULL,
-    0x000000000000808BULL, 0x0000000080000001ULL,
-    0x8000000080008081ULL, 0x8000000000008009ULL,
-    0x000000000000008AULL, 0x0000000000000088ULL,
-    0x0000000080008009ULL, 0x000000008000000AULL,
-    0x000000008000808BULL, 0x800000000000008BULL,
-    0x8000000000008089ULL, 0x8000000000008003ULL,
-    0x8000000000008002ULL, 0x8000000000000080ULL,
-    0x000000000000800AULL, 0x800000008000000AULL,
-    0x8000000080008081ULL, 0x8000000000008080ULL,
-    0x0000000080000001ULL, 0x8000000080008008ULL
+    0x0000000000000001ULL,
+    0x0000000000008082ULL,
+    0x800000000000808aULL,
+    0x8000000080008000ULL,
+    0x000000000000808bULL,
+    0x0000000080000001ULL,
+    0x8000000080008081ULL,
+    0x8000000000008009ULL,
+    0x000000000000008aULL,
+    0x0000000000000088ULL,
+    0x0000000080008009ULL,
+    0x000000008000000aULL,
+    0x000000008000808bULL,
+    0x800000000000008bULL,
+    0x8000000000008089ULL,
+    0x8000000000008003ULL,
+    0x8000000000008002ULL,
+    0x8000000000000080ULL,
+    0x000000000000800aULL,
+    0x800000008000000aULL,
+    0x8000000080008081ULL,
+    0x8000000000008080ULL,
+    0x0000000080000001ULL,
+    0x8000000080008008ULL,
 };
 
-static const uint32_t R[25] = {
+static const int R[25] = {
      0,  1, 62, 28, 27,
     36, 44,  6, 55, 20,
      3, 10, 43, 25, 39,
@@ -116,146 +39,222 @@ static const uint32_t R[25] = {
     18,  2, 61, 56, 14
 };
 
-static inline uint32_t IDX(uint32_t x, uint32_t y) {
-    return x + 5*y;
+static inline int idx(int x, int y) {
+    return x + 5 * y;
 }
 
-/* =========================================================
- *  Keccak-f[1600] (witness-aligned)
- * ========================================================= */
-void keccak_f1600(Wire state[25]) {
-    for (int round = 0; round < 24; round++) {
+static inline uint64_t rotl(uint64_t x, int n) {
+    return (x << n) | (x >> (64 - n));
+}
 
-        // theta
-        Wire C[5];
-        for (int x = 0; x < 5; x++) {
-            Wire col[5];
-            for (int y = 0; y < 5; y++) col[y] = state[IDX(x,y)];
-            C[x] = bxor_multi(col, 5);
-        }
+static void dump_a0(const char* tag, uint64_t A[25]) {
+    printf("%s A[0]=0x%016llx\n", tag, (unsigned long long)A[0]);
+}
 
-        Wire D[5];
-        for (int x = 0; x < 5; x++) {
-            D[x] = bxor(C[(x+4)%5], rotl(C[(x+1)%5], 1));
-        }
 
-        for (int y = 0; y < 5; y++)
-            for (int x = 0; x < 5; x++)
-                state[IDX(x,y)] = bxor(state[IDX(x,y)], D[x]);
 
-        // rho + pi
-        Wire tmp[25];
-        for (int i = 0; i < 25; i++) tmp[i] = state[0];
 
-        for (int y = 0; y < 5; y++)
-            for (int x = 0; x < 5; x++) {
-                uint32_t r = R[IDX(x,y)];
-                if (r)
-                    tmp[IDX(y,(2*x+3*y)%5)] = rotl(state[IDX(x,y)], r);
-            }
+/* ---------- keccak steps ---------- */
 
-        for (int i = 0; i < 25; i++) state[i] = tmp[i];
+static void theta(uint64_t A[25]) {
+    uint64_t C[5], D[5];
 
-        // chi
-        for (int y = 0; y < 5; y++) {
-            Wire a0 = state[IDX(0,y)];
-            Wire a1 = state[IDX(1,y)];
-            Wire a2 = state[IDX(2,y)];
-            Wire a3 = state[IDX(3,y)];
-            Wire a4 = state[IDX(4,y)];
-
-            state[IDX(0,y)] = fax(bnot(a1), a2, a0);
-            state[IDX(1,y)] = fax(bnot(a2), a3, a1);
-            state[IDX(2,y)] = fax(bnot(a3), a4, a2);
-            state[IDX(3,y)] = fax(bnot(a4), a0, a3);
-            state[IDX(4,y)] = fax(bnot(a0), a1, a4);
-        }
-
-        // iota
-        state[0] = bxor(state[0], constant_wire(1 + round));
+    for (int x = 0; x < 5; x++) {
+        C[x] = A[idx(x,0)] ^ A[idx(x,1)] ^ A[idx(x,2)]
+             ^ A[idx(x,3)] ^ A[idx(x,4)];
     }
 
-    // final internal (matches Rust)
-    add_internal(0);
+    for (int x = 0; x < 5; x++) {
+        D[x] = C[(x+4)%5] ^ rotl(C[(x+1)%5], 1);
+    }
+
+	/* ===== Rust force_commit 对应点 ===== */
+    printf("=== ROUND %d : THETA force_commit D[x] ===\n");
+    for (int x = 0; x < 5; x++) {
+        printf("D[%d] = 0x%016llx\n",
+               x, (unsigned long long)D[x]);
+    }
+
+    for (int y = 0; y < 5; y++) {
+        for (int x = 0; x < 5; x++) {
+            A[idx(x,y)] ^= D[x];
+        }
+    }
 }
 
-/* =========================================================
- *  Utils
- * ========================================================= */
-static uint64_t le_bytes_to_u64(const uint8_t *b, int n) {
-    uint64_t v = 0;
-    for (int i = 0; i < n; i++)
-        v |= (uint64_t)b[i] << (8*i);
-    return v;
+static void rho_pi(uint64_t A[25]) {
+    uint64_t T[25];
+    memcpy(T, A, sizeof(T));
+
+    for (int y = 0; y < 5; y++) {
+        for (int x = 0; x < 5; x++) {
+            int i = idx(x,y);
+            int j = idx(y, (2*x + 3*y) % 5);
+            if (R[i] == 0)
+                T[j] = A[i];
+            else
+                T[j] = rotl(A[i], R[i]);
+        }
+    }
+
+    memcpy(A, T, sizeof(T));
 }
 
+static void chi(uint64_t A[25]) {
+    uint64_t T[5];
+    for (int y = 0; y < 5; y++) {
+        for (int x = 0; x < 5; x++)
+            T[x] = A[idx(x,y)];
+        for (int x = 0; x < 5; x++)
+            A[idx(x,y)] ^= (~T[(x+1)%5]) & T[(x+2)%5];
+    }
+}
+
+static void iota(uint64_t A[25], int round) {
+    A[0] ^= RC[round];
+}
+
+static void keccak_round(uint64_t A[25], int round) {
+    //dump_a0("before theta:", A);
+    theta(A);
+    //dump_a0("before rho:", A);
+    rho_pi(A);
+    //dump_a0("before chi:", A);
+    chi(A);
+    //dump_a0("before theta:", A);
+    /* dump state */
+    printf("=== STATE AFTER chi ===\n");
+    for (int i = 0; i < 25; i++) {
+        printf("A[%02d] = 0x%016llx\n",
+               i, (unsigned long long)A[i]);
+    }
+    iota(A, round);
+    //dump_a0("final A[0]:", A);
+}
+
+size_t pack_message_le(
+    const uint8_t *msg,
+    size_t len_bytes,
+    uint64_t *out_words
+) {
+    size_t n_words = (len_bytes + 7) / 8;
+    memset(out_words, 0, n_words * sizeof(uint64_t));
+
+    for (size_t i = 0; i < len_bytes; i++) {
+        size_t w = i / 8;
+        size_t b = i % 8;
+        out_words[w] |= ((uint64_t)msg[i]) << (8 * b);
+    }
+    return n_words;
+}
+
+/* ---------- test: EXACTLY like Rust ---------- */
 
 int main(void) {
-    /* init constants */
-    extern const uint64_t CONST_TABLE[];
-    for (int i = 0; i < N_CONST; i++)
-        value_vec[i] = CONST_TABLE[i];
+    uint64_t state[25];
+    memset(state, 0, sizeof(state));
 
-    /* message = 8 bytes */
-    uint8_t msg[8] = { 178,96,184,161,3,67,191,90 };
+    /* ================= input ================= */
 
-    /* expected digest */
-    uint8_t digest_bytes[32] = {
-        0xf3,0xa4,0x33,0x17,0x36,0xe3,0x9b,0x61,
-        0xb5,0xea,0x9c,0x4f,0x07,0x66,0x12,0xe3,
-        0xba,0xb7,0xd4,0xcf,0x36,0xce,0x5a,0xf1,
-        0x86,0x31,0xd7,0xad,0xc5,0xde,0x69,0xe3
-    };
+    /* ===== choose message ===== */
 
-    /* witness wires */
-    Wire message = { N_CONST };
-    Wire digest[4] = {
-        { N_CONST+1 }, { N_CONST+2 },
-        { N_CONST+3 }, { N_CONST+4 }
-    };
+    // --- 1 byte ---
+    //uint8_t message[] = {0x61};
+    //size_t len_bytes = 1;
 
-    /* fill private inputs */
-    value_vec[message.idx] = le_bytes_to_u64(msg, 8);
-    for (int i = 0; i < 4; i++)
-        value_vec[digest[i].idx] =
-            le_bytes_to_u64(digest_bytes + 8*i, 8);
+    // --- 8 bytes ---
+    uint8_t message[] = {0xb2,0x60,0xb8,0xa1,0x03,0x43,0xbf,0x5a};
+    size_t len_bytes = 8;
 
-    /* padding (LEN=8 case) */
-    Wire zero = { 0 };
-    Wire padded[17];
-    padded[0] = message;
-    padded[1] = (Wire){1}; /* constant 0x01 */
-    for (int i = 2; i < 17; i++) padded[i] = zero;
-    padded[16] = (Wire){12}; /* 0x80<<56 */
+    // --- 135 bytes  ---
+    //uint8_t message[135] = {
+    //    205,56,46,120,38,70,176,74, 76,161,62,248,186,171,0,97,
+    //    14,97,19,181,18,218,255,110, 190,82,13,172,78,15,252,212,
+    //    167,160,145,109,245,59,123,1, 104,252,210,46,223,161,102,93,
+    //    148,109,214,57,223,206,145,171, 245,78,42,68,87,119,185,75,
+    //    101,248,209,146,155,53,143,129, 173,242,54,174,209,171,27,215,
+    //    198,250,92,195,67,161,79,113, 156,60,94,138,44,79,95,120,
+    //    79,40,68,247,42,43,19,68, 34,230,149,237,238,160,33,80,
+    //    23,97,248,116,231,55,174,141, 240,103,50,221,30,28,239,242,
+    //    231,101,207,149,236,37,35
+    //};
+    //size_t len_bytes = 135;
 
-    /* state init */
-    Wire state[25];
-    for (int i = 0; i < 25; i++) state[i] = zero;
+    /* ================= debug message ================= */
+    printf("=== INPUT MESSAGE (%zu bytes) ===\n", len_bytes);
 
-    /* absorb */
-    for (int i = 0; i < 17; i++)
-        state[i] = (Wire){ next_internal++ }, value_vec[state[i].idx] =
-            value_vec[padded[i].idx];
+    /* print bytes */
+    printf("Bytes: [");
+    for (size_t i = 0; i < len_bytes; i++) {
+        printf("%u", message[i]);
+        if (i + 1 < len_bytes) printf(", ");
+    }
+    printf("]\n");
 
-    /* permutation */
-    keccak_f1600(state);
+    /* print hex */
+    printf("Hex: ");
+    for (size_t i = 0; i < len_bytes; i++) {
+        printf("%02x", message[i]);
+    }
+    printf("\n\n");
 
-    /* check digest */
-    for (int i = 0; i < 4; i++) {
-        uint64_t got = value_vec[state[i].idx];
-        uint64_t exp = value_vec[digest[i].idx];
-        assert(got == exp);
+    /* ================= padding ================= */
+
+    const int RATE_WORDS = 17;
+    uint64_t padded[17];
+    memset(padded, 0, sizeof(padded));
+
+    size_t n_words = (len_bytes + 7) / 8;
+    size_t full_words = len_bytes / 8;
+    size_t rem_bytes = len_bytes % 8;
+
+    /* ---- copy full words ---- */
+    for (size_t i = 0; i < full_words; i++) {
+        uint64_t w = 0;
+        for (int b = 0; b < 8; b++)
+            w |= ((uint64_t)message[8*i + b]) << (8*b);
+        padded[i] = w;
     }
 
-    printf("Digest OK ✔\n");
+    if (rem_bytes == 0) {
+        /* -------- Rust: push Word(0x01) -------- */
+        padded[full_words] = 0x01ULL;
+    } else {
+        /* -------- Rust boundary word -------- */
+        uint64_t last = 0;
+        for (size_t b = 0; b < rem_bytes; b++)
+            last |= ((uint64_t)message[8*full_words + b]) << (8*b);
 
-    /* dump witness */
-    FILE *f = fopen("keccak_witness_dump_c.txt", "w");
-    for (int i = 0; i < COMMITTED; i++)
-        fprintf(f, "W[%05d] = 0x%016llx\n",
-                i, (unsigned long long)value_vec[i]);
-    fclose(f);
+        uint64_t padding_bit = 1ULL << (rem_bytes * 8);
+        padded[full_words] = last ^ padding_bit;
+    }
 
-    printf("Witness written to keccak_witness_dump_c.txt\n");
+    /* ---- final 0x80 << 56 ---- */
+    padded[RATE_WORDS - 1] ^= (0x80ULL << 56);
+
+    /* ================= debug padding ================= */
+    printf("=== PADDED WORDS ===\n");
+    for (int i = 0; i < RATE_WORDS; i++) {
+        printf("padded[%02d] = 0x%016llx\n",
+               i, (unsigned long long)padded[i]);
+    }
+
+    /* ================= absorb ================= */
+    for (int i = 0; i < RATE_WORDS; i++) {
+        state[i] ^= padded[i];
+    }
+
+    /* ================= permutation ================= */
+    for (int r = 0; r < 24; r++) {
+        keccak_round(state, r);
+    }
+
+    /* ================= digest ================= */
+    printf("\n=== DIGEST (state[0..3]) ===\n");
+    for (int i = 0; i < 4; i++) {
+        printf("digest[%d] = 0x%016llx\n",
+               i, (unsigned long long)state[i]);
+    }
+
     return 0;
 }
