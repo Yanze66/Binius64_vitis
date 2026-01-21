@@ -180,35 +180,21 @@ int main(void) {
     //};
     //size_t len_bytes = 135;
 
-    /* ================= debug message ================= */
-    printf("=== INPUT MESSAGE (%zu bytes) ===\n", len_bytes);
-
-    /* print bytes */
-    printf("Bytes: [");
-    for (size_t i = 0; i < len_bytes; i++) {
-        printf("%u", message[i]);
-        if (i + 1 < len_bytes) printf(", ");
-    }
-    printf("]\n");
-
-    /* print hex */
-    printf("Hex: ");
-    for (size_t i = 0; i < len_bytes; i++) {
-        printf("%02x", message[i]);
-    }
-    printf("\n\n");
-
     /* ================= padding ================= */
+    const size_t RATE_WORDS = 17;
 
-    const int RATE_WORDS = 17;
-    uint64_t padded[17];
-    memset(padded, 0, sizeof(padded));
+    /* number of blocks */
+    size_t n_blocks = (len_bytes + 1 + 136 - 1) / 136;
+    size_t n_padded_words = n_blocks * RATE_WORDS;
 
-    size_t n_words = (len_bytes + 7) / 8;
-    size_t full_words = len_bytes / 8;
-    size_t rem_bytes = len_bytes % 8;
+    /* padded message */
+    uint64_t *padded = calloc(n_padded_words, sizeof(uint64_t));
 
-    /* ---- copy full words ---- */
+
+        size_t full_words = len_bytes / 8;
+    size_t rem_bytes  = len_bytes % 8;
+
+    /* full words */
     for (size_t i = 0; i < full_words; i++) {
         uint64_t w = 0;
         for (int b = 0; b < 8; b++)
@@ -216,11 +202,10 @@ int main(void) {
         padded[i] = w;
     }
 
+    /* boundary word */
     if (rem_bytes == 0) {
-        /* -------- Rust: push Word(0x01) -------- */
         padded[full_words] = 0x01ULL;
     } else {
-        /* -------- Rust boundary word -------- */
         uint64_t last = 0;
         for (size_t b = 0; b < rem_bytes; b++)
             last |= ((uint64_t)message[8*full_words + b]) << (8*b);
@@ -230,23 +215,26 @@ int main(void) {
     }
 
     /* ---- final 0x80 << 56 ---- */
-    padded[RATE_WORDS - 1] ^= (0x80ULL << 56);
+    padded[n_blocks * RATE_WORDS - 1] ^= (0x80ULL << 56);
 
     /* ================= debug padding ================= */
-    printf("=== PADDED WORDS ===\n");
+    //printf("=== PADDED WORDS ===\n");
+    //for (int i = 0; i < RATE_WORDS; i++) {
+    //    printf("padded[%02d] = 0x%016llx\n",
+    //           i, (unsigned long long)padded[i]);
+    //}
+
+    /* ================= absorb and permutation ================= */
+    for (size_t b = 0; b < n_blocks; b++) {
+    /* absorb one block */
     for (int i = 0; i < RATE_WORDS; i++) {
-        printf("padded[%02d] = 0x%016llx\n",
-               i, (unsigned long long)padded[i]);
+        state[i] ^= padded[b * RATE_WORDS + i];
     }
 
-    /* ================= absorb ================= */
-    for (int i = 0; i < RATE_WORDS; i++) {
-        state[i] ^= padded[i];
-    }
-
-    /* ================= permutation ================= */
+    /* permutation */
     for (int r = 0; r < 24; r++) {
         keccak_round(state, r);
+    }
     }
 
     /* ================= digest ================= */
