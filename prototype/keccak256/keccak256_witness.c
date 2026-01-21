@@ -254,7 +254,7 @@ int main(void) {
     uint64_t *padded = calloc(n_padded_words, sizeof(uint64_t));
 
 
-        size_t full_words = len_bytes / 8;
+    size_t full_words = len_bytes / 8;
     size_t rem_bytes  = len_bytes % 8;
 
     /* full words */
@@ -289,15 +289,15 @@ int main(void) {
 
     /* ================= absorb and permutation ================= */
     for (size_t b = 0; b < n_blocks; b++) {
-    /* absorb one block */
-    for (int i = 0; i < RATE_WORDS; i++) {
-        state[i] ^= padded[b * RATE_WORDS + i];
-    }
+    	/* absorb one block */
+    	for (int i = 0; i < RATE_WORDS; i++) {
+    	    state[i] ^= padded[b * RATE_WORDS + i];
+    	}
 
-    /* permutation */
-    for (int r = 0; r < 24; r++) {
-        keccak_round(state, r);
-    }
+    	/* permutation */
+    	for (int r = 0; r < 24; r++) {
+    	    keccak_round(state, r);
+    	}
     }
 
     /* ================= digest ================= */
