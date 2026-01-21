@@ -265,7 +265,7 @@ int main(void) {
         padded[i] = w;
     }
 
-    /* boundary word */
+    /* boundary word, add 0x01 at the end of the msg */
     if (rem_bytes == 0) {
         padded[full_words] = 0x01ULL;
     } else {
