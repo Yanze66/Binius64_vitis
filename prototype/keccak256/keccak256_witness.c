@@ -244,39 +244,38 @@ int main(void) {
     }
     printf("\n\n");
     /* ================= padding ================= */
-
     const size_t RATE_WORDS = 17;
 
-/* number of blocks */
-size_t n_blocks = (len_bytes + 1 + 136 - 1) / 136;
-size_t n_padded_words = n_blocks * RATE_WORDS;
+    /* number of blocks */
+    size_t n_blocks = (len_bytes + 1 + 136 - 1) / 136;
+    size_t n_padded_words = n_blocks * RATE_WORDS;
 
-/* padded message */
-uint64_t *padded = calloc(n_padded_words, sizeof(uint64_t));
+    /* padded message */
+    uint64_t *padded = calloc(n_padded_words, sizeof(uint64_t));
 
 
-    size_t full_words = len_bytes / 8;
-size_t rem_bytes  = len_bytes % 8;
+        size_t full_words = len_bytes / 8;
+    size_t rem_bytes  = len_bytes % 8;
 
-/* full words */
-for (size_t i = 0; i < full_words; i++) {
-    uint64_t w = 0;
-    for (int b = 0; b < 8; b++)
-        w |= ((uint64_t)message[8*i + b]) << (8*b);
-    padded[i] = w;
-}
+    /* full words */
+    for (size_t i = 0; i < full_words; i++) {
+        uint64_t w = 0;
+        for (int b = 0; b < 8; b++)
+            w |= ((uint64_t)message[8*i + b]) << (8*b);
+        padded[i] = w;
+    }
 
-/* boundary word */
-if (rem_bytes == 0) {
-    padded[full_words] = 0x01ULL;
-} else {
-    uint64_t last = 0;
-    for (size_t b = 0; b < rem_bytes; b++)
-        last |= ((uint64_t)message[8*full_words + b]) << (8*b);
+    /* boundary word */
+    if (rem_bytes == 0) {
+        padded[full_words] = 0x01ULL;
+    } else {
+        uint64_t last = 0;
+        for (size_t b = 0; b < rem_bytes; b++)
+            last |= ((uint64_t)message[8*full_words + b]) << (8*b);
 
-    uint64_t padding_bit = 1ULL << (rem_bytes * 8);
-    padded[full_words] = last ^ padding_bit;
-}
+        uint64_t padding_bit = 1ULL << (rem_bytes * 8);
+        padded[full_words] = last ^ padding_bit;
+    }
 
     /* ---- final 0x80 << 56 ---- */
     padded[n_blocks * RATE_WORDS - 1] ^= (0x80ULL << 56);
