@@ -12,12 +12,12 @@ If you wanna run the whole test, go dir "binius64", commend:
 
 It supports to compress arbitrary length of message, recorded in "Keccak_witness_dump_xxbyte.txt".
 
-# step 2: (under prosessing)
+# step 2: (Done)
 
 I try to migrate the whole rust project to the edge platform, and one of the challenge is to reproduce the whole project in C++. 
 
 Based on the golden reference, I should first build keccak, and then find the key spot where to output witness.
 
-# step 3
+# step 3 (under prosessing)
 
 Build the hardware accelerator and implement an end-to-end Binius-64 implementation.
